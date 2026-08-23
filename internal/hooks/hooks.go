@@ -49,11 +49,17 @@ func (d notificationDelivery) delivered() bool {
 
 // HookData represents the data received from Claude Code hooks
 type HookData struct {
-	TranscriptPath string `json:"transcript_path"`
-	SessionID      string `json:"session_id"`
-	CWD            string `json:"cwd"`
-	ToolName       string `json:"tool_name,omitempty"`
-	HookEventName  string `json:"hook_event_name,omitempty"`
+	TranscriptPath       string          `json:"transcript_path"`
+	SessionID            string          `json:"session_id"`
+	CWD                  string          `json:"cwd"`
+	ToolName             string          `json:"tool_name,omitempty"`
+	HookEventName        string          `json:"hook_event_name,omitempty"`
+	TurnID               string          `json:"turn_id,omitempty"`
+	PermissionMode       string          `json:"permission_mode,omitempty"`
+	Prompt               string          `json:"prompt,omitempty"`
+	LastAssistantMessage string          `json:"last_assistant_message,omitempty"`
+	ToolInput            json.RawMessage `json:"tool_input,omitempty"`
+	ToolResponse         json.RawMessage `json:"tool_response,omitempty"`
 	// Team-related fields (present in TeammateIdle, TaskCreated, TaskCompleted hooks)
 	TeamName     string `json:"team_name,omitempty"`
 	TeammateName string `json:"teammate_name,omitempty"`
@@ -80,12 +86,19 @@ type Handler struct {
 	notifierSvc  notifierInterface
 	webhookSvc   webhookInterface
 	pluginRoot   string
+	runtime      config.Runtime
 }
 
 // NewHandler creates a new hook handler
 func NewHandler(pluginRoot string) (*Handler, error) {
+	return NewHandlerForRuntime(pluginRoot, config.RuntimeClaude)
+}
+
+// NewHandlerForRuntime creates a handler whose reads and writes stay inside the
+// selected host runtime. Claude remains the compatibility default.
+func NewHandlerForRuntime(pluginRoot string, runtime config.Runtime) (*Handler, error) {
 	// Load config
-	cfg, err := config.LoadFromPluginRoot(pluginRoot)
+	cfg, err := config.LoadFromPluginRootForRuntime(pluginRoot, runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -95,14 +108,35 @@ func NewHandler(pluginRoot string) (*Handler, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	stateMgr := state.NewManager()
+	dedupMgr := dedup.NewManager()
+	var teamStateMgr *teamstate.Manager
+	if runtime == config.RuntimeCodex {
+		dataDir, err := config.GetStableConfigDirForRuntime(runtime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve Codex data directory: %w", err)
+		}
+		stateDir := filepath.Join(dataDir, "state")
+		if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			return nil, fmt.Errorf("failed to create Codex state directory: %w", err)
+		}
+		stateMgr = state.NewManagerWithDir(stateDir)
+		dedupMgr = dedup.NewManagerWithDir(stateDir)
+		// Codex has no Claude team registry; do not inspect any Claude root.
+		teamStateMgr = teamstate.NewManager(filepath.Join(stateDir, "no-claude-teams"))
+	} else {
+		teamStateMgr = teamstate.NewManager("")
+	}
+
 	return &Handler{
 		cfg:          cfg,
-		dedupMgr:     dedup.NewManager(),
-		stateMgr:     state.NewManager(),
-		teamStateMgr: teamstate.NewManager(""),
+		dedupMgr:     dedupMgr,
+		stateMgr:     stateMgr,
+		teamStateMgr: teamStateMgr,
 		notifierSvc:  notifier.New(cfg),
 		webhookSvc:   webhook.New(cfg),
 		pluginRoot:   pluginRoot,
+		runtime:      runtime,
 	}, nil
 }
 
@@ -193,103 +227,113 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 	var parsedMessages []jsonl.Message // reused by generateMessage to avoid double I/O
 	var err error
 
-	switch hookEvent {
-	case "PreToolUse":
-		status = h.handlePreToolUse(&hookData)
-	case "Notification":
-		// Check session state first (60s TTL) to suppress duplicates after PreToolUse
-		status, err = h.handleNotificationEvent(&hookData)
+	if h.runtime == config.RuntimeCodex {
+		status, err = h.handleCodexHook(hookEvent, &hookData)
 		if err != nil {
 			return err
 		}
-	case "Stop":
-		// A Stop event is the MAIN agent finishing, so suppress only when its
-		// transcript_path actually points at a subagent/teammate transcript
-		// (.../subagents/...). Note: on current Claude Code the Stop hook receives
-		// the parent session transcript, so this rarely matches — kept as a
-		// forward-compatible guard for transcripts that are routed differently.
-		if h.cfg.ShouldSuppressForSubagents() && isSubagentTranscript(hookData.TranscriptPath) {
-			logging.Debug("Stop: subagent transcript detected (%s), suppressing (config: suppressForSubagents)", hookData.TranscriptPath)
-			return nil
+		if hookEvent == "Stop" {
+			defer h.cleanupOldLocks()
 		}
-
-		// Team mode: check if this session is a team lead and suppress if needed
-		if h.cfg.GetTeamMode() == "wait-all" {
-			if teamInfo := h.teamStateMgr.DetectTeamLead(hookData.SessionID); teamInfo != nil {
-				logging.Debug("Stop: team lead detected for team %q (members: %d), checking team state",
-					teamInfo.TeamName, len(teamInfo.Members))
-
-				// Record that the lead has stopped
-				if err := h.teamStateMgr.RecordLeadStopped(teamInfo.TeamName); err != nil {
-					logging.Warn("Stop: failed to record lead stopped: %v", err)
-				}
-
-				// Check if all teammates are already idle
-				allIdle, err := h.teamStateMgr.CheckAllIdle(teamInfo.TeamName, teamInfo.Members)
-				if err != nil {
-					logging.Warn("Stop: failed to check team idle state: %v", err)
-				}
-
-				if !allIdle {
-					// Not all teammates idle yet — suppress notification, wait for TeammateIdle
-					logging.Debug("Stop: team %q has active teammates, suppressing notification", teamInfo.TeamName)
-					return nil
-				}
-
-				// All teammates are idle — proceed with notification and mark as notified
-				logging.Debug("Stop: team %q all teammates idle, sending notification", teamInfo.TeamName)
-				if err := h.teamStateMgr.MarkNotified(teamInfo.TeamName); err != nil {
-					logging.Warn("Stop: failed to mark team notified: %v", err)
-				}
+	} else {
+		switch hookEvent {
+		case "PreToolUse":
+			status = h.handlePreToolUse(&hookData)
+		case "Notification":
+			// Check session state first (60s TTL) to suppress duplicates after PreToolUse
+			status, err = h.handleNotificationEvent(&hookData)
+			if err != nil {
+				return err
 			}
-		} else if h.cfg.GetTeamMode() == "never" {
-			if teamInfo := h.teamStateMgr.DetectTeamLead(hookData.SessionID); teamInfo != nil {
-				logging.Debug("Stop: team mode is 'never', suppressing for team %q", teamInfo.TeamName)
+		case "Stop":
+			// A Stop event is the MAIN agent finishing, so suppress only when its
+			// transcript_path actually points at a subagent/teammate transcript
+			// (.../subagents/...). Note: on current Claude Code the Stop hook receives
+			// the parent session transcript, so this rarely matches — kept as a
+			// forward-compatible guard for transcripts that are routed differently.
+			if h.cfg.ShouldSuppressForSubagents() && isSubagentTranscript(hookData.TranscriptPath) {
+				logging.Debug("Stop: subagent transcript detected (%s), suppressing (config: suppressForSubagents)", hookData.TranscriptPath)
 				return nil
 			}
-		}
-		// teamMode "always" or not a team lead: fall through to normal processing
 
-		// Analyze the transcript to determine status
-		bench.Start("stop.analyze")
-		status, parsedMessages, err = h.handleStopEvent(&hookData)
-		bench.Elapsed("stop.analyze")
-		if err != nil {
-			return err
+			// Team mode: check if this session is a team lead and suppress if needed
+			if h.cfg.GetTeamMode() == "wait-all" {
+				if teamInfo := h.teamStateMgr.DetectTeamLead(hookData.SessionID); teamInfo != nil {
+					logging.Debug("Stop: team lead detected for team %q (members: %d), checking team state",
+						teamInfo.TeamName, len(teamInfo.Members))
+
+					// Record that the lead has stopped
+					if err := h.teamStateMgr.RecordLeadStopped(teamInfo.TeamName); err != nil {
+						logging.Warn("Stop: failed to record lead stopped: %v", err)
+					}
+
+					// Check if all teammates are already idle
+					allIdle, err := h.teamStateMgr.CheckAllIdle(teamInfo.TeamName, teamInfo.Members)
+					if err != nil {
+						logging.Warn("Stop: failed to check team idle state: %v", err)
+					}
+
+					if !allIdle {
+						// Not all teammates idle yet — suppress notification, wait for TeammateIdle
+						logging.Debug("Stop: team %q has active teammates, suppressing notification", teamInfo.TeamName)
+						return nil
+					}
+
+					// All teammates are idle — proceed with notification and mark as notified
+					logging.Debug("Stop: team %q all teammates idle, sending notification", teamInfo.TeamName)
+					if err := h.teamStateMgr.MarkNotified(teamInfo.TeamName); err != nil {
+						logging.Warn("Stop: failed to mark team notified: %v", err)
+					}
+				}
+			} else if h.cfg.GetTeamMode() == "never" {
+				if teamInfo := h.teamStateMgr.DetectTeamLead(hookData.SessionID); teamInfo != nil {
+					logging.Debug("Stop: team mode is 'never', suppressing for team %q", teamInfo.TeamName)
+					return nil
+				}
+			}
+			// teamMode "always" or not a team lead: fall through to normal processing
+
+			// Analyze the transcript to determine status
+			bench.Start("stop.analyze")
+			status, parsedMessages, err = h.handleStopEvent(&hookData)
+			bench.Elapsed("stop.analyze")
+			if err != nil {
+				return err
+			}
+			// Note: We don't delete session state here to preserve cooldown info
+			// State files have TTL and will be cleaned up automatically
+			defer h.cleanupOldLocks()
+		case "SubagentStop":
+			// A SubagentStop event always denotes a subagent (Task tool) finishing,
+			// so the event type itself — not the transcript path — is the reliable
+			// subagent signal. Claude Code passes the PARENT session transcript_path
+			// to this hook (e.g. .../<session>.jsonl), NOT the subagent's
+			// .../<session>/subagents/agent-*.jsonl file, so isSubagentTranscript()
+			// never matches here. Suppress by the event so suppressForSubagents works
+			// as a safety net regardless of notifyOnSubagentStop.
+			if h.cfg.ShouldSuppressForSubagents() {
+				logging.Debug("SubagentStop: suppressing subagent notification (config: suppressForSubagents)")
+				return nil
+			}
+			// Not globally suppressed — honor the explicit opt-in flag.
+			if !h.cfg.Notifications.NotifyOnSubagentStop {
+				logging.Debug("SubagentStop: notifications disabled (config: notifyOnSubagentStop), skipping")
+				return nil
+			}
+			// Opted in and not suppressed: handle like Stop.
+			logging.Debug("SubagentStop: notifications enabled (config), processing")
+			bench.Start("stop.analyze")
+			status, parsedMessages, err = h.handleStopEvent(&hookData)
+			bench.Elapsed("stop.analyze")
+			if err != nil {
+				return err
+			}
+			defer h.cleanupOldLocks()
+		case "TeammateIdle":
+			return h.handleTeammateIdle(&hookData)
+		default:
+			return fmt.Errorf("unknown hook event: %s", hookEvent)
 		}
-		// Note: We don't delete session state here to preserve cooldown info
-		// State files have TTL and will be cleaned up automatically
-		defer h.cleanupOldLocks()
-	case "SubagentStop":
-		// A SubagentStop event always denotes a subagent (Task tool) finishing,
-		// so the event type itself — not the transcript path — is the reliable
-		// subagent signal. Claude Code passes the PARENT session transcript_path
-		// to this hook (e.g. .../<session>.jsonl), NOT the subagent's
-		// .../<session>/subagents/agent-*.jsonl file, so isSubagentTranscript()
-		// never matches here. Suppress by the event so suppressForSubagents works
-		// as a safety net regardless of notifyOnSubagentStop.
-		if h.cfg.ShouldSuppressForSubagents() {
-			logging.Debug("SubagentStop: suppressing subagent notification (config: suppressForSubagents)")
-			return nil
-		}
-		// Not globally suppressed — honor the explicit opt-in flag.
-		if !h.cfg.Notifications.NotifyOnSubagentStop {
-			logging.Debug("SubagentStop: notifications disabled (config: notifyOnSubagentStop), skipping")
-			return nil
-		}
-		// Opted in and not suppressed: handle like Stop.
-		logging.Debug("SubagentStop: notifications enabled (config), processing")
-		bench.Start("stop.analyze")
-		status, parsedMessages, err = h.handleStopEvent(&hookData)
-		bench.Elapsed("stop.analyze")
-		if err != nil {
-			return err
-		}
-		defer h.cleanupOldLocks()
-	case "TeammateIdle":
-		return h.handleTeammateIdle(&hookData)
-	default:
-		return fmt.Errorf("unknown hook event: %s", hookEvent)
 	}
 
 	// If status is unknown, skip

@@ -258,6 +258,131 @@ func newTestHandler(t *testing.T, cfg *config.Config) (*Handler, *mockNotifier, 
 	return handler, mockNotif, mockWH
 }
 
+func newCodexTestHandler(t *testing.T) (*Handler, *mockNotifier) {
+	t.Helper()
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{Desktop: config.DesktopConfig{Enabled: true}},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete":         {Title: "Task Complete"},
+			"review_complete":       {Title: "Review Complete"},
+			"question":              {Title: "Question"},
+			"plan_ready":            {Title: "Plan Ready"},
+			"session_limit_reached": {Title: "Session Limit"},
+			"api_error":             {Title: "API Error"},
+			"api_error_overloaded":  {Title: "API Error"},
+		},
+	}
+	handler, notifier, _ := newTestHandler(t, cfg)
+	handler.runtime = config.RuntimeCodex
+	handler.stateMgr = state.NewManagerWithDir(t.TempDir())
+	handler.dedupMgr = dedup.NewManagerWithDir(t.TempDir())
+	return handler, notifier
+}
+
+func TestHandler_CodexDocumentedPayloadStatuses(t *testing.T) {
+	tests := []struct {
+		name       string
+		event      string
+		payload    string
+		wantStatus analyzer.Status
+	}{
+		{name: "task complete", event: "Stop", payload: `{"session_id":"codex-task","turn_id":"turn-1","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"default","last_assistant_message":"Implemented the requested change."}`, wantStatus: analyzer.StatusTaskComplete},
+		{name: "question", event: "PermissionRequest", payload: `{"session_id":"codex-question","turn_id":"turn-2","cwd":"/workspace","hook_event_name":"PermissionRequest","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"make build","description":"Run the build outside the sandbox"}}`, wantStatus: analyzer.StatusQuestion},
+		{name: "plan ready", event: "Stop", payload: `{"session_id":"codex-plan","turn_id":"turn-3","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"plan","last_assistant_message":"The implementation plan is ready for approval."}`, wantStatus: analyzer.StatusPlanReady},
+		{name: "session limit", event: "Stop", payload: `{"session_id":"codex-limit","turn_id":"turn-4","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"default","last_assistant_message":"Session limit reached. Start a new session to continue."}`, wantStatus: analyzer.StatusSessionLimitReached},
+		{name: "API error", event: "PostToolUse", payload: `{"session_id":"codex-api","turn_id":"turn-5","cwd":"/workspace","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"mcp__example__call","tool_use_id":"call-2","tool_input":{},"tool_response":{"isError":true,"content":[{"type":"text","text":"API error: authentication failed"}]}}`, wantStatus: analyzer.StatusAPIError},
+		{name: "API overloaded", event: "PostToolUse", payload: `{"session_id":"codex-overloaded","turn_id":"turn-5b","cwd":"/workspace","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"mcp__example__call","tool_use_id":"call-3","tool_input":{},"tool_response":{"isError":true,"content":[{"type":"text","text":"API error: rate limit exceeded (429)"}]}}`, wantStatus: analyzer.StatusAPIErrorOverloaded},
+		{name: "API error in Stop message", event: "Stop", payload: `{"session_id":"codex-stop-api","turn_id":"turn-5c","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"default","last_assistant_message":"API error: service overloaded (529)."}`, wantStatus: analyzer.StatusAPIErrorOverloaded},
+		{name: "rate limit prose is task complete", event: "Stop", payload: `{"session_id":"codex-rate-docs","turn_id":"turn-5d","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"default","last_assistant_message":"Documented how the service rate limit is configured."}`, wantStatus: analyzer.StatusTaskComplete},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, notifier := newCodexTestHandler(t)
+			if err := handler.HandleHook(tt.event, strings.NewReader(tt.payload)); err != nil {
+				t.Fatal(err)
+			}
+			call := notifier.lastCall()
+			if call == nil {
+				t.Fatal("expected notification")
+			}
+			if call.status != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", call.status, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestHandler_CodexReviewUsesPromptStateWithoutTranscript(t *testing.T) {
+	handler, notifier := newCodexTestHandler(t)
+	prompt := `{"session_id":"codex-review","turn_id":"turn-6","cwd":"/workspace","hook_event_name":"UserPromptSubmit","permission_mode":"default","prompt":"Review this change for correctness and regressions."}`
+	if err := handler.HandleHook("UserPromptSubmit", strings.NewReader(prompt)); err != nil {
+		t.Fatal(err)
+	}
+	if notifier.wasCalled() {
+		t.Fatal("UserPromptSubmit should record context without notifying")
+	}
+
+	stop := `{"session_id":"codex-review","turn_id":"turn-6","cwd":"/workspace","hook_event_name":"Stop","permission_mode":"default","last_assistant_message":"Review complete. I found no correctness or regression issues in the requested change."}`
+	if err := handler.HandleHook("Stop", strings.NewReader(stop)); err != nil {
+		t.Fatal(err)
+	}
+	call := notifier.lastCall()
+	if call == nil || call.status != analyzer.StatusReviewComplete {
+		t.Fatalf("review call = %#v, want review_complete", call)
+	}
+}
+
+func TestNewHandlerForRuntime_CodexWritesOnlyInsideCodexHome(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-profile")
+	claudeHome := filepath.Join(t.TempDir(), "claude-profile")
+	pluginRoot := t.TempDir()
+	requireMkdirAll := func(path string) {
+		t.Helper()
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requireMkdirAll(codexHome)
+	requireMkdirAll(filepath.Join(claudeHome, "claude-notifications-go"))
+	requireMkdirAll(filepath.Join(pluginRoot, "config"))
+
+	defaultConfig, err := os.ReadFile("../../config/config.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, "config", "config.json"), defaultConfig, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeHome, "claude-notifications-go", "config.json"), []byte(`{"notifications":{"desktop":{"enabled":false}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	setTestHome(t, home)
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeHome)
+	handler, err := NewHandlerForRuntime(pluginRoot, config.RuntimeCodex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handler.notifierSvc.Close()
+	defer handler.webhookSvc.Shutdown(time.Second)
+
+	if handler.runtime != config.RuntimeCodex {
+		t.Fatalf("runtime = %q, want codex", handler.runtime)
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "claude-notifications-go", "config.json")); err != nil {
+		t.Fatalf("Codex config was not created under CODEX_HOME: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "claude-notifications-go", "state")); err != nil {
+		t.Fatalf("Codex state directory was not created under CODEX_HOME: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected ~/.codex access or creation: %v", err)
+	}
+}
+
 // === Integration Tests ===
 
 func TestHandler_PreToolUse_ExitPlanMode(t *testing.T) {

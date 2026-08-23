@@ -22,6 +22,7 @@ type SessionState struct {
 	LastNotificationMessage string `json:"last_notification_message,omitempty"`
 	GhosttyTerminalID       string `json:"ghostty_terminal_id,omitempty"`
 	CWD                     string `json:"cwd"`
+	LastPrompt              string `json:"last_prompt,omitempty"`
 }
 
 // Manager manages session state
@@ -31,9 +32,27 @@ type Manager struct {
 
 // NewManager creates a new state manager
 func NewManager() *Manager {
-	return &Manager{
-		tempDir: platform.TempDir(),
+	return NewManagerWithDir(platform.TempDir())
+}
+
+// NewManagerWithDir creates a manager rooted in an explicit runtime data directory.
+func NewManagerWithDir(dir string) *Manager {
+	return &Manager{tempDir: dir}
+}
+
+// UpdatePrompt records the documented Codex UserPromptSubmit prompt for the turn.
+func (m *Manager) UpdatePrompt(sessionID, prompt, cwd string) error {
+	state, err := m.Load(sessionID)
+	if err != nil {
+		return err
 	}
+	if state == nil {
+		state = &SessionState{SessionID: sessionID}
+	}
+	state.LastPrompt = prompt
+	state.CWD = cwd
+	state.LastTimestamp = platform.CurrentTimestamp()
+	return m.Save(state)
 }
 
 // getStatePath returns the path to the state file for a session

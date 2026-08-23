@@ -1,0 +1,22 @@
+{
+  "name": "claude-notifications-go",
+  "version": "1.40.1",
+  "description": "Desktop and webhook notifications for Codex and Claude Code task statuses",
+  "interface": {
+    "displayName": "Claude Notifications Go",
+    "shortDescription": "Task status notifications for Codex and Claude Code",
+    "longDescription": "Send desktop or webhook notifications when Codex and Claude Code reach useful task states.",
+    "developerName": "777genius",
+    "category": "Productivity",
+    "capabilities": ["Interactive"],
+    "defaultPrompt": [
+      "Explain how to configure notification sounds and delivery channels."
+    ]
+  },
+  "author": {
+    "name": "777genius"
+  },
+  "repository": "https://github.com/rknightion/claude-notifications-go",
+  "license": "GPL-3.0",
+  "keywords": ["notifications", "alerts", "productivity", "hooks"]
+}

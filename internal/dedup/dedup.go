@@ -16,9 +16,12 @@ type Manager struct {
 
 // NewManager creates a new deduplication manager
 func NewManager() *Manager {
-	return &Manager{
-		tempDir: platform.TempDir(),
-	}
+	return NewManagerWithDir(platform.TempDir())
+}
+
+// NewManagerWithDir creates a manager rooted in an explicit runtime data directory.
+func NewManagerWithDir(dir string) *Manager {
+	return &Manager{tempDir: dir}
 }
 
 // getLockPath returns the path to the lock file for a session and hook event

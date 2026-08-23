@@ -8,8 +8,24 @@
 # RELIABILITY: All operations use || true to never block Claude.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_JSON="$SCRIPT_DIR/../.claude-plugin/plugin.json"
 INSTALL_SCRIPT="$SCRIPT_DIR/install.sh"
+
+HOOK_RUNTIME="claude"
+_EXPECT_RUNTIME=0
+for _ARG in "$@"; do
+    if [ "$_EXPECT_RUNTIME" = 1 ]; then
+        HOOK_RUNTIME="$_ARG"
+        _EXPECT_RUNTIME=0
+    elif [ "$_ARG" = "--runtime" ]; then
+        _EXPECT_RUNTIME=1
+    fi
+done
+
+if [ "$HOOK_RUNTIME" = "codex" ]; then
+    PLUGIN_JSON="$SCRIPT_DIR/../.codex-plugin/plugin.json"
+else
+    PLUGIN_JSON="$SCRIPT_DIR/../.claude-plugin/plugin.json"
+fi
 
 
 # On Windows prefer the native .exe (reliable from sh). Keep .bat for users who run it from cmd.exe.
@@ -143,7 +159,14 @@ run_install() {
 
 # === Main Logic ===
 
-STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-notifications-go"
+if [ "$HOOK_RUNTIME" = "codex" ]; then
+    # PLUGIN_DATA is the Codex-provided writable plugin directory. Fall back to
+    # the installed plugin only for the lazy binary version cache; the Go
+    # runtime still requires CODEX_HOME for configuration and hook state.
+    STAMP_DIR="${PLUGIN_DATA:-$SCRIPT_DIR/.cache}/claude-notifications-go"
+else
+    STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-notifications-go"
+fi
 VERSION_CACHE="$STAMP_DIR/verified-version"
 
 NEED_INSTALL=0
@@ -225,14 +248,21 @@ fi
 
 # Run hook or exit gracefully
 if binary_ok; then
-    # Export plugin root so the binary can find ClaudeNotifier.app and other resources
-    if [ -z "$CLAUDE_PLUGIN_ROOT" ]; then
+    # Export compatibility roots so bundled assets resolve on both runtimes.
+    if [ "$HOOK_RUNTIME" = "codex" ]; then
+        if [ -z "${PLUGIN_ROOT:-}" ]; then
+            PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+        fi
+        export PLUGIN_ROOT
+        CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+    elif [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
         CLAUDE_PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
     fi
     export CLAUDE_PLUGIN_ROOT
 
     # Persist a stable pointer to the current plugin root outside the plugin cache.
     # This is a best-effort fallback for older cached paths and for shim wrappers.
+    if [ "$HOOK_RUNTIME" = "claude" ]; then
     _CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}"
     if [ -z "$_CLAUDE_HOME" ]; then
         _CLAUDE_HOME="$HOME/.claude"
@@ -249,6 +279,7 @@ if binary_ok; then
         printf '%s\n' "$CLAUDE_PLUGIN_ROOT" > "$_TMP_PTR" 2>/dev/null && \
             mv "$_TMP_PTR" "$_PTR_FILE" 2>/dev/null || true
         rm -f "$_TMP_PTR" 2>/dev/null || true
+    fi
     fi
 
     run_binary "$@" || true

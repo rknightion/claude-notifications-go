@@ -10,6 +10,14 @@ import (
 	"github.com/777genius/claude-notifications/internal/platform"
 )
 
+// Runtime identifies the host whose configuration and writable state are in use.
+type Runtime string
+
+const (
+	RuntimeClaude Runtime = "claude"
+	RuntimeCodex  Runtime = "codex"
+)
+
 // Config represents the plugin configuration
 type Config struct {
 	Notifications NotificationsConfig   `json:"notifications"`
@@ -356,26 +364,67 @@ func GetClaudeConfigDir() (string, error) {
 	return filepath.Join(home, ".claude"), nil
 }
 
+// GetCodexConfigDir returns the explicitly selected Codex profile root.
+// The notification adapter intentionally does not reproduce Codex's ~/.codex
+// fallback: plugin hooks must stay inside the CODEX_HOME of the invoking profile.
+func GetCodexConfigDir() (string, error) {
+	dir := os.Getenv("CODEX_HOME")
+	if dir == "" {
+		return "", fmt.Errorf("CODEX_HOME is required for Codex notification hooks")
+	}
+	dir = filepath.Clean(dir)
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", fmt.Errorf("cannot access CODEX_HOME %q: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("CODEX_HOME %q is not a directory", dir)
+	}
+	return dir, nil
+}
+
+// GetRuntimeConfigDir resolves the active host configuration root.
+func GetRuntimeConfigDir(runtime Runtime) (string, error) {
+	switch runtime {
+	case RuntimeClaude:
+		return GetClaudeConfigDir()
+	case RuntimeCodex:
+		return GetCodexConfigDir()
+	default:
+		return "", fmt.Errorf("unsupported notification runtime %q", runtime)
+	}
+}
+
 // GetStableConfigDir returns the stable config directory outside the plugin cache.
 // This directory survives plugin updates (bootstrap.sh rm -rf of cache).
 func GetStableConfigDir() (string, error) {
-	claudeDir, err := GetClaudeConfigDir()
+	return GetStableConfigDirForRuntime(RuntimeClaude)
+}
+
+// GetStableConfigDirForRuntime returns the profile-local writable data root.
+func GetStableConfigDirForRuntime(runtime Runtime) (string, error) {
+	runtimeDir, err := GetRuntimeConfigDir(runtime)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(claudeDir, "claude-notifications-go"), nil
+	return filepath.Join(runtimeDir, "claude-notifications-go"), nil
 }
 
 // GetStableConfigPath returns the stable config file path outside the plugin cache.
 func GetStableConfigPath() (string, error) {
-	dir, err := GetStableConfigDir()
+	return GetStableConfigPathForRuntime(RuntimeClaude)
+}
+
+// GetStableConfigPathForRuntime returns the runtime's profile-local config file.
+func GetStableConfigPathForRuntime(runtime Runtime) (string, error) {
+	dir, err := GetStableConfigDirForRuntime(runtime)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "config.json"), nil
 }
 
-// LoadFromPluginRoot loads configuration with a resilient fallback chain:
+// LoadFromPluginRoot loads Claude configuration with a resilient fallback chain:
 // 1. Stable path (<Claude config dir>/claude-notifications-go/config.json) — preferred
 // 2. Old path (pluginRoot/config/config.json) — fallback, auto-migrates to stable
 // 3. Default config — if neither path has valid config
@@ -383,8 +432,13 @@ func GetStableConfigPath() (string, error) {
 // Corrupted config files are non-fatal: a warning is printed to stderr and
 // logged, then the next source in the chain is tried.
 func LoadFromPluginRoot(pluginRoot string) (*Config, error) {
+	return LoadFromPluginRootForRuntime(pluginRoot, RuntimeClaude)
+}
+
+// LoadFromPluginRootForRuntime loads configuration without crossing runtime roots.
+func LoadFromPluginRootForRuntime(pluginRoot string, runtime Runtime) (*Config, error) {
 	// 1. Try stable path
-	stablePath, stableErr := GetStableConfigPath()
+	stablePath, stableErr := GetStableConfigPathForRuntime(runtime)
 	if stableErr != nil {
 		msg := fmt.Sprintf("warning: cannot resolve stable config path: %v, using legacy path only", stableErr)
 		fmt.Fprintln(os.Stderr, msg)

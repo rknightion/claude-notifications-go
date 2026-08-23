@@ -37,8 +37,9 @@ notification_plugin_go/
 │       └── jsonl.go               # Streaming JSONL parser
 ├── config/                        # Legacy config (migrated under the active Claude config root)
 │   └── config.json                # Legacy config (auto-migrated to stable path)
-├── hooks/                         # Claude Code hooks
-│   └── hooks.json                 # Hook definitions
+├── hooks/                         # Host lifecycle hooks
+│   ├── hooks.json                 # Codex-supported hook definitions
+│   └── claude-hooks.json          # Claude Code compatibility definitions
 ├── .claude-plugin/                # Plugin metadata
 │   ├── plugin.json                # Plugin manifest
 │   └── marketplace.json           # Marketplace definition

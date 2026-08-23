@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/777genius/claude-notifications/internal/audio"
+	"github.com/777genius/claude-notifications/internal/config"
 	"github.com/777genius/claude-notifications/internal/errorhandler"
 	"github.com/777genius/claude-notifications/internal/hooks"
 	"github.com/777genius/claude-notifications/internal/logging"
@@ -46,12 +47,13 @@ func main() {
 
 	switch command {
 	case "handle-hook":
-		if len(os.Args) < 3 {
-			fmt.Fprintf(os.Stderr, "Error: hook event name required\n")
+		runtimeName, hookEvent, err := parseHandleHookArgs(os.Args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			printUsage()
 			os.Exit(1)
 		}
-		handleHook(os.Args[2])
+		handleHook(config.Runtime(runtimeName), hookEvent)
 	case "focus-window":
 		if len(os.Args) < 4 {
 			fmt.Fprintf(os.Stderr, "Error: focus-window requires bundleID and cwd arguments\n")
@@ -200,23 +202,57 @@ func newExecHook(exePath, hookName string) hookCommand {
 	}
 }
 
-func handleHook(hookEvent string) {
+func parseHandleHookArgs(args []string) (runtimeName, hookEvent string, err error) {
+	runtimeName = string(config.RuntimeClaude)
+	if len(args) == 0 {
+		return "", "", fmt.Errorf("hook event name required")
+	}
+	if args[0] == "--runtime" {
+		if len(args) < 3 {
+			return "", "", fmt.Errorf("--runtime requires a runtime and hook event")
+		}
+		runtimeName = args[1]
+		args = args[2:]
+	}
+	if runtimeName != string(config.RuntimeClaude) && runtimeName != string(config.RuntimeCodex) {
+		return "", "", fmt.Errorf("unsupported notification runtime %q", runtimeName)
+	}
+	if len(args) != 1 || args[0] == "" {
+		return "", "", fmt.Errorf("exactly one hook event name is required")
+	}
+	return runtimeName, args[0], nil
+}
+
+func handleHook(runtimeName config.Runtime, hookEvent string) {
 	// Add panic recovery for this function
 	defer errorhandler.HandlePanic()
 
 	// Determine plugin root
-	pluginRoot := getPluginRoot()
+	pluginRoot := getPluginRootForRuntime(runtimeName)
 	maybeScheduleWindowsLazyUpdate(pluginRoot)
 
 	// Initialize logger
-	if _, err := logging.InitLogger(pluginRoot); err != nil {
+	logRoot := pluginRoot
+	if runtimeName == config.RuntimeCodex {
+		var err error
+		logRoot, err = config.GetStableConfigDirForRuntime(runtimeName)
+		if err != nil {
+			errorhandler.HandleCriticalError(err, "Failed to resolve Codex data root")
+			os.Exit(1)
+		}
+		if err := os.MkdirAll(logRoot, 0o700); err != nil {
+			errorhandler.HandleCriticalError(err, "Failed to create Codex data root")
+			os.Exit(1)
+		}
+	}
+	if _, err := logging.InitLogger(logRoot); err != nil {
 		errorhandler.HandleCriticalError(err, "Failed to initialize logger")
 		os.Exit(1)
 	}
 	defer func() { _ = logging.Close() }()
 
 	// Create handler
-	handler, err := hooks.NewHandler(pluginRoot)
+	handler, err := hooks.NewHandlerForRuntime(pluginRoot, runtimeName)
 	if err != nil {
 		errorhandler.HandleCriticalError(err, "Failed to create handler")
 		os.Exit(1)
@@ -410,6 +446,15 @@ func powershellSingleQuoted(value string) string {
 }
 
 func getPluginRoot() string {
+	return getPluginRootForRuntime(config.RuntimeClaude)
+}
+
+func getPluginRootForRuntime(runtimeName config.Runtime) string {
+	if runtimeName == config.RuntimeCodex {
+		if root := os.Getenv("PLUGIN_ROOT"); root != "" {
+			return root
+		}
+	}
 	// Try CLAUDE_PLUGIN_ROOT environment variable first
 	if root := os.Getenv("CLAUDE_PLUGIN_ROOT"); root != "" {
 		return root

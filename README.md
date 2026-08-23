@@ -16,7 +16,7 @@
 </table>
 </div>
 
-Smart notifications for Claude Code with click-to-focus, git branch display, and webhook integrations.
+Smart notifications for Codex and Claude Code with click-to-focus, git branch display, and webhook integrations.
 
 > **Boost your productivity** — check out the [advanced task manager for Claude with a convenient UI](https://github.com/777genius/claude_agent_teams_ui), from the creator of this plugin.
 
@@ -25,9 +25,10 @@ Smart notifications for Claude Code with click-to-focus, git branch display, and
   - [Features](#features)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
-    - [Quick Install (Recommended)](#quick-install-recommended)
-    - [Manual Install](#manual-install)
+    - [Claude Code](#claude-code)
+    - [Codex](#codex)
     - [Updating](#updating)
+    - [Uninstalling](#uninstalling)
   - [Supported Notification Types](#supported-notification-types)
   - [Platform Support](#platform-support)
     - [Click-to-Focus (macOS & Linux)](#click-to-focus-macos--linux)
@@ -56,11 +57,13 @@ Smart notifications for Claude Code with click-to-focus, git branch display, and
 
 ### Prerequisites
 
-- Claude Code
+- Codex or Claude Code
 - **Windows users:** Git Bash (included with [Git for Windows](https://git-scm.com/download/win))
 - **macOS/Linux users:** No additional software required
 
-### Quick Install (Recommended)
+### Claude Code
+
+#### Quick Install (Recommended)
 
 One command to install everything:
 
@@ -76,7 +79,7 @@ The binary is downloaded once and cached locally. You can re-run `/claude-notifi
 
 > If the bootstrap script doesn't work for your environment, use the [Manual Install](#manual-install) steps below inside Claude Code.
 
-### Manual Install
+#### Manual Install
 
 <details>
 <summary>Step-by-step installation inside Claude Code (if bootstrap doesn't work)</summary>
@@ -96,6 +99,27 @@ Run these slash commands in the Claude Code chat, not in your system terminal:
 ```
 
 </details>
+
+### Codex
+
+Codex installations are marketplace-backed and stay inside the invoking
+profile's existing `CODEX_HOME`. Run these commands through the same isolated
+Codex launcher you normally use:
+
+```bash
+codex plugin marketplace add rknightion/claude-notifications-go
+codex plugin add claude-notifications-go@claude-notifications-go
+```
+
+Start a new Codex thread, open `/hooks`, and review and trust the installed
+plugin hooks. The first hook invocation downloads the matching notification
+binary. Codex supplies `PLUGIN_ROOT` and `PLUGIN_DATA`; the plugin uses those
+only for installed assets and its plugin cache. Configuration, logs, and hook
+state live under `$CODEX_HOME/claude-notifications-go`.
+
+The Codex integration uses supported lifecycle hooks rather than adding a
+`notify` key to `config.toml`, so installation does not replace or rewrite any
+existing Codex configuration.
 
 > Having issues with installation? See [Troubleshooting](#troubleshooting).
 
@@ -124,16 +148,43 @@ If the binary auto-update didn't work (e.g. no internet at the time), run `/clau
 
 </details>
 
+For Codex, refresh the marketplace and reinstall the plugin, then start a new
+thread:
+
+```bash
+codex plugin marketplace upgrade claude-notifications-go
+codex plugin add claude-notifications-go@claude-notifications-go
+```
+
+### Uninstalling
+
+Claude Code:
+
+```text
+/plugin uninstall claude-notifications-go@claude-notifications-go
+```
+
+Codex:
+
+```bash
+codex plugin remove claude-notifications-go@claude-notifications-go
+```
+
+Both commands remove the installed plugin without editing unrelated host
+configuration. Profile-local notification settings are retained so a later
+reinstall can reuse them. Remove the marketplace separately only when you no
+longer want updates from it.
+
 ## Supported Notification Types
 
-| Status | Icon | Description | Trigger |
-|--------|------|-------------|---------|
-| Task Complete | ✅ | Main task completed | Stop/SubagentStop hooks (state machine detects active tools like Write/Edit/Bash, or ExitPlanMode followed by tool usage) |
-| Review Complete | 🔍 | Code review finished | Stop/SubagentStop hooks (state machine detects only read-like tools: Read/Grep/Glob with no active tools, plus long text response >200 chars) |
-| Question | ❓ | Claude has a question | PreToolUse hook (AskUserQuestion) OR Notification hook |
-| Plan Ready | 📋 | Plan ready for approval | PreToolUse hook (ExitPlanMode) |
-| Session Limit Reached | ⏱️ | Session limit reached | Stop/SubagentStop hooks (state machine detects "Session limit reached" text in last 3 assistant messages) |
-| API Error | 🔴 | Authentication expired, rate limit, server error, connection error | Stop/SubagentStop hooks (state machine detects via `isApiErrorMessage` flag + `error` field from JSONL) |
+| Status | Icon | Description | Claude Code trigger | Codex trigger |
+|--------|------|-------------|---------------------|---------------|
+| Task Complete | ✅ | Main task completed | Stop/SubagentStop transcript state machine | Stop with a non-empty documented `last_assistant_message` |
+| Review Complete | 🔍 | Code review finished | Read-only tool activity plus a substantial response | UserPromptSubmit records an explicit review/audit request; Stop proves the turn completed |
+| Question | ❓ | The agent needs input | AskUserQuestion or permission Notification | PermissionRequest |
+| Plan Ready | 📋 | Plan ready for approval | ExitPlanMode | Stop in `plan` permission mode |
+| Session Limit Reached | ⏱️ | Session limit reached | Explicit limit text in recent assistant messages | Explicit limit text in Stop `last_assistant_message` |
+| API Error | 🔴 | Authentication expired, rate limit, server error, connection error | Structured Claude API-error transcript fields | Explicit error data in PostToolUse `tool_response`, or explicit Stop error text |
 
 ## Platform Support
 
@@ -192,15 +243,17 @@ Run `/claude-notifications-go:settings` to configure sounds, volume, webhooks, a
 
 ### Manual Configuration
 
-The configuration root resolves in this order: `CLAUDE_CONFIG_DIR`, the legacy
-`CLAUDE_HOME` override, then the platform default. The settings wizard and
-runtime use the same root, so isolated Claude Code profiles keep independent
-notification settings.
+Claude Code resolves its configuration root in this order:
+`CLAUDE_CONFIG_DIR`, the legacy `CLAUDE_HOME` override, then the platform
+default. Codex requires the invoking profile's explicit `CODEX_HOME` and never
+falls back to or creates `~/.codex`. The settings wizard and runtime use the
+same host root, so isolated profiles keep independent notification settings.
 
 Config file location under that root:
 
 | Environment | Path |
 |-------------|------|
+| Codex profile | `$CODEX_HOME/claude-notifications-go/config.json` |
 | Profile override | `$CLAUDE_CONFIG_DIR/claude-notifications-go/config.json` |
 | Legacy override | `$CLAUDE_HOME/claude-notifications-go/config.json` |
 | macOS / Linux default | `~/.claude/claude-notifications-go/config.json` |

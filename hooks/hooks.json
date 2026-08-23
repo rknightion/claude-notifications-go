@@ -1,34 +1,34 @@
 {
+  "description": "Codex lifecycle hooks for claude-notifications-go.",
   "hooks": {
-    "PreToolUse": [
+    "UserPromptSubmit": [
       {
-        "matcher": "ExitPlanMode|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
-            "command": "sh",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
-              "handle-hook",
-              "PreToolUse"
-            ],
+            "command": "sh \"${PLUGIN_ROOT}/bin/hook-wrapper.sh\" handle-hook --runtime codex UserPromptSubmit",
             "timeout": 30
           }
         ]
       }
     ],
-    "Notification": [
+    "PermissionRequest": [
       {
-        "matcher": "permission_prompt",
         "hooks": [
           {
             "type": "command",
-            "command": "sh",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
-              "handle-hook",
-              "Notification"
-            ],
+            "command": "sh \"${PLUGIN_ROOT}/bin/hook-wrapper.sh\" handle-hook --runtime codex PermissionRequest",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/hook-wrapper.sh\" handle-hook --runtime codex PostToolUse",
             "timeout": 30
           }
         ]
@@ -39,44 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
-              "handle-hook",
-              "Stop"
-            ],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
-              "handle-hook",
-              "SubagentStop"
-            ],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "TeammateIdle": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
-              "handle-hook",
-              "TeammateIdle"
-            ],
+            "command": "sh \"${PLUGIN_ROOT}/bin/hook-wrapper.sh\" handle-hook --runtime codex Stop",
             "timeout": 30
           }
         ]

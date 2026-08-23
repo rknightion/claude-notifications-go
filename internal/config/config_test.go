@@ -1282,6 +1282,31 @@ func TestGetStableConfigPath_ClaudeHomeCompatibilityFallback(t *testing.T) {
 	assert.Equal(t, filepath.Join(legacyDir, "claude-notifications-go", "config.json"), path)
 }
 
+func TestGetStableConfigPathForRuntime_CodexHomeIsIsolated(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-profile")
+	claudeHome := filepath.Join(t.TempDir(), "claude-profile")
+	require.NoError(t, os.MkdirAll(codexHome, 0o700))
+	setTestHome(t, home)
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeHome)
+
+	path, err := GetStableConfigPathForRuntime(RuntimeCodex)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(codexHome, "claude-notifications-go", "config.json"), path)
+	assert.NoDirExists(t, filepath.Join(home, ".codex"))
+}
+
+func TestGetStableConfigPathForRuntime_CodexRequiresExplicitHome(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("CODEX_HOME", "")
+
+	_, err := GetStableConfigPathForRuntime(RuntimeCodex)
+	require.ErrorContains(t, err, "CODEX_HOME")
+	assert.NoDirExists(t, filepath.Join(home, ".codex"))
+}
+
 func TestGetStableConfigPath_NoHome(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("HOME isolation not applicable on Windows (uses USERPROFILE)")

@@ -1003,7 +1003,12 @@ make_executable() {
 windows_hooks_path() {
     local plugin_root
     plugin_root="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)" || return 1
-    printf '%s\n' "${plugin_root}/hooks/hooks.json"
+    if [ -f "${plugin_root}/hooks/claude-hooks.json" ]; then
+        printf '%s\n' "${plugin_root}/hooks/claude-hooks.json"
+    else
+        # Compatibility with cached releases that predate the split registry.
+        printf '%s\n' "${plugin_root}/hooks/hooks.json"
+    fi
 }
 
 windows_native_hooks_json() {

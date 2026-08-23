@@ -10,6 +10,39 @@ import (
 	"testing"
 )
 
+func TestParseHandleHookArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantRuntime string
+		wantEvent   string
+		wantErr     bool
+	}{
+		{name: "Claude compatibility", args: []string{"Stop"}, wantRuntime: "claude", wantEvent: "Stop"},
+		{name: "Codex explicit runtime", args: []string{"--runtime", "codex", "Stop"}, wantRuntime: "codex", wantEvent: "Stop"},
+		{name: "missing runtime value", args: []string{"--runtime"}, wantErr: true},
+		{name: "unsupported runtime", args: []string{"--runtime", "other", "Stop"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimeName, event, err := parseHandleHookArgs(tt.args)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if runtimeName != tt.wantRuntime || event != tt.wantEvent {
+				t.Fatalf("got runtime=%q event=%q, want runtime=%q event=%q", runtimeName, event, tt.wantRuntime, tt.wantEvent)
+			}
+		})
+	}
+}
+
 func TestReadPluginManifestVersion(t *testing.T) {
 	pluginRoot := t.TempDir()
 	manifestDir := filepath.Join(pluginRoot, ".claude-plugin")

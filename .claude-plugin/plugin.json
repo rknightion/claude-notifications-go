@@ -9,6 +9,7 @@
     "license": "GPL-3.0",
     "repository": "https://github.com/777genius/claude-notifications-go",
     "keywords": ["notifications", "alerts", "productivity", "go"],
+    "hooks": "./hooks/claude-hooks.json",
     "commands": [
         "./commands/init.md",
         "./commands/settings.md",
