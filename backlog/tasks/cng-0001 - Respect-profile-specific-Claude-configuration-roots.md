@@ -68,4 +68,6 @@ Final gate after review fixes: go test -race ./... passed; go vet ./... passed; 
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Implemented profile-aware Claude configuration-root resolution across runtime configuration, team discovery, iTerm helper state, installers, plugin commands, and documentation. Regression tests cover CLAUDE_CONFIG_DIR precedence, legacy CLAUDE_HOME compatibility, default behavior, team discovery, and iTerm marker paths. CodeRabbit completed with six findings and all were addressed. The full repository gate passed; 12 optional platform or real-network E2E legs were skipped and remain unproven.
+
+Implementation commit: 1e7098010525d501f7ec92edad310c0c56ee226c.
 <!-- SECTION:FINAL_SUMMARY:END -->
