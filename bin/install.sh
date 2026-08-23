@@ -12,6 +12,12 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Use the same profile-aware Claude root as bootstrap.sh and the Go runtime.
+export CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}"
+if [ -z "$CLAUDE_HOME" ]; then
+    CLAUDE_HOME="$HOME/.claude"
+fi
+
 # Get target directory
 # Priority: 1) INSTALL_TARGET_DIR env var (set by notifications-init.md)
 #           2) Script's own directory (normal case)
@@ -1384,9 +1390,8 @@ setup_iterm2_venv() {
     # tmux must be installed
     command -v tmux &>/dev/null || return 0
 
-    # Use $HOME/.claude explicitly (not $CLAUDE_HOME) — the Go code resolves
-    # the venv path via os.UserHomeDir()/.claude/..., so the venv must be there.
-    local VENV_DIR="$HOME/.claude/claude-notifications-go/iterm2-venv"
+    # Keep helper state in the same profile-local root as the Go runtime.
+    local VENV_DIR="${CLAUDE_HOME}/claude-notifications-go/iterm2-venv"
 
     # Skip if venv already exists and is functional
     if [ -x "$VENV_DIR/bin/python3" ] && \

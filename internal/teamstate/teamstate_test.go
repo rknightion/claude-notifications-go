@@ -69,6 +69,29 @@ func TestDetectTeamLead(t *testing.T) {
 	})
 }
 
+func TestNewManagerUsesActiveClaudeConfigDir(t *testing.T) {
+	configDir := t.TempDir()
+	legacyDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	t.Setenv("CLAUDE_HOME", legacyDir)
+
+	mgr := NewManager("")
+	if mgr.claudeDir != configDir {
+		t.Fatalf("NewManager(\"\").claudeDir = %q, want %q", mgr.claudeDir, configDir)
+	}
+}
+
+func TestNewManagerUsesClaudeHomeCompatibilityFallback(t *testing.T) {
+	legacyDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CLAUDE_HOME", legacyDir)
+
+	mgr := NewManager("")
+	if mgr.claudeDir != legacyDir {
+		t.Fatalf("NewManager(\"\").claudeDir = %q, want %q", mgr.claudeDir, legacyDir)
+	}
+}
+
 func TestDetectTeamLead_NoNonLeadMembers(t *testing.T) {
 	tmpDir := t.TempDir()
 	teamsDir := filepath.Join(tmpDir, "teams", "solo-team")

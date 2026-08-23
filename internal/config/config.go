@@ -337,14 +337,33 @@ func expandPath(value, pluginRoot string) string {
 	return filepath.Clean(expanded)
 }
 
-// GetStableConfigDir returns the stable config directory outside the plugin cache.
-// This directory survives plugin updates (bootstrap.sh rm -rf of cache).
-func GetStableConfigDir() (string, error) {
+// GetClaudeConfigDir returns the active Claude Code configuration root.
+// CLAUDE_CONFIG_DIR is the official profile override. CLAUDE_HOME remains a
+// compatibility fallback because the bootstrap scripts have historically
+// supported it.
+func GetClaudeConfigDir() (string, error) {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return filepath.Clean(dir), nil
+	}
+	if dir := os.Getenv("CLAUDE_HOME"); dir != "" {
+		return filepath.Clean(dir), nil
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".claude", "claude-notifications-go"), nil
+	return filepath.Join(home, ".claude"), nil
+}
+
+// GetStableConfigDir returns the stable config directory outside the plugin cache.
+// This directory survives plugin updates (bootstrap.sh rm -rf of cache).
+func GetStableConfigDir() (string, error) {
+	claudeDir, err := GetClaudeConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(claudeDir, "claude-notifications-go"), nil
 }
 
 // GetStableConfigPath returns the stable config file path outside the plugin cache.
@@ -357,7 +376,7 @@ func GetStableConfigPath() (string, error) {
 }
 
 // LoadFromPluginRoot loads configuration with a resilient fallback chain:
-// 1. Stable path (~/.claude/claude-notifications-go/config.json) — preferred
+// 1. Stable path (<Claude config dir>/claude-notifications-go/config.json) — preferred
 // 2. Old path (pluginRoot/config/config.json) — fallback, auto-migrates to stable
 // 3. Default config — if neither path has valid config
 //

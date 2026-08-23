@@ -820,9 +820,8 @@ setup_iterm2_venv() {
 
     is_iterm2_detected || return 0
 
-    # Use $HOME/.claude explicitly (not $CLAUDE_HOME) — the Go code resolves
-    # the venv path via os.UserHomeDir()/.claude/..., so the venv must be there.
-    local VENV_DIR="$HOME/.claude/claude-notifications-go/iterm2-venv"
+    # Keep helper state in the same profile-local root as the Go runtime.
+    local VENV_DIR="${CLAUDE_HOME}/claude-notifications-go/iterm2-venv"
 
     # Skip if venv already exists and is functional
     if [ -x "$VENV_DIR/bin/python3" ] && \

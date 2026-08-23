@@ -15,6 +15,8 @@ import (
 func setTestHome(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("HOME", dir)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CLAUDE_HOME", "")
 	if runtime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", dir)
 	}
@@ -1254,6 +1256,30 @@ func TestGetStableConfigPath(t *testing.T) {
 	path, err := GetStableConfigPath()
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(home, ".claude", "claude-notifications-go", "config.json"), path)
+}
+
+func TestGetStableConfigPath_ClaudeConfigDirTakesPrecedence(t *testing.T) {
+	home := t.TempDir()
+	configDir := t.TempDir()
+	legacyDir := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	t.Setenv("CLAUDE_HOME", legacyDir)
+
+	path, err := GetStableConfigPath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(configDir, "claude-notifications-go", "config.json"), path)
+}
+
+func TestGetStableConfigPath_ClaudeHomeCompatibilityFallback(t *testing.T) {
+	home := t.TempDir()
+	legacyDir := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("CLAUDE_HOME", legacyDir)
+
+	path, err := GetStableConfigPath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(legacyDir, "claude-notifications-go", "config.json"), path)
 }
 
 func TestGetStableConfigPath_NoHome(t *testing.T) {

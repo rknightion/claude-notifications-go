@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/777genius/claude-notifications/internal/config"
 	"github.com/777genius/claude-notifications/internal/logging"
 )
 
@@ -45,18 +46,18 @@ type State struct {
 // All state mutations use file-level locking (flock) for cross-process safety,
 // since Stop and TeammateIdle hooks run as separate OS processes.
 type Manager struct {
-	claudeDir string // defaults to ~/.claude
+	claudeDir string // defaults to the active Claude Code config root
 }
 
 // NewManager creates a new team state manager.
-// claudeDir can be empty to use the default (~/.claude).
+// claudeDir can be empty to use the active Claude Code config root.
 func NewManager(claudeDir string) *Manager {
 	if claudeDir == "" {
-		home, err := os.UserHomeDir()
+		resolvedDir, err := config.GetClaudeConfigDir()
 		if err != nil {
 			claudeDir = filepath.Join(os.TempDir(), ".claude")
 		} else {
-			claudeDir = filepath.Join(home, ".claude")
+			claudeDir = resolvedDir
 		}
 	}
 	return &Manager{claudeDir: claudeDir}

@@ -21,7 +21,7 @@ No messages appearing in Slack/Discord/Telegram, no errors in logs.
 
 1. **Verify webhook is enabled:**
    ```bash
-   cat ~/.claude/claude-notifications-go/config.json | grep -A 3 "webhook"
+   cat "${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json" | grep -A 3 "webhook"
    ```
    Ensure `"enabled": true`
 
@@ -54,7 +54,7 @@ No messages appearing in Slack/Discord/Telegram, no errors in logs.
 
 4. **Verify config is valid JSON:**
    ```bash
-   cat ~/.claude/claude-notifications-go/config.json | jq .
+   cat "${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json" | jq .
    ```
    If error, fix JSON syntax
 
@@ -435,10 +435,10 @@ export CLAUDE_NOTIFICATIONS_DEBUG=1
 
 ```bash
 # Validate JSON
-cat ~/.claude/claude-notifications-go/config.json | jq .
+cat "${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json" | jq .
 
 # Check webhook config
-cat ~/.claude/claude-notifications-go/config.json | jq '.notifications.webhook'
+cat "${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json" | jq '.notifications.webhook'
 ```
 
 ### Step 3: Test Webhook URL

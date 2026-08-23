@@ -15,7 +15,11 @@ func overrideHome(t *testing.T, dir string) {
 	t.Helper()
 	oldHome := os.Getenv("HOME")
 	oldProfile := os.Getenv("USERPROFILE")
+	oldConfigDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	oldClaudeHome := os.Getenv("CLAUDE_HOME")
 	os.Setenv("HOME", dir)
+	os.Unsetenv("CLAUDE_CONFIG_DIR")
+	os.Unsetenv("CLAUDE_HOME")
 	if runtime.GOOS == "windows" {
 		os.Setenv("USERPROFILE", dir)
 	}
@@ -28,7 +32,31 @@ func overrideHome(t *testing.T, dir string) {
 				os.Unsetenv("USERPROFILE")
 			}
 		}
+		if oldConfigDir != "" {
+			os.Setenv("CLAUDE_CONFIG_DIR", oldConfigDir)
+		} else {
+			os.Unsetenv("CLAUDE_CONFIG_DIR")
+		}
+		if oldClaudeHome != "" {
+			os.Setenv("CLAUDE_HOME", oldClaudeHome)
+		} else {
+			os.Unsetenv("CLAUDE_HOME")
+		}
 	})
+}
+
+func TestIterm2MarkerPathsUseActiveClaudeConfigDir(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	t.Setenv("CLAUDE_HOME", t.TempDir())
+
+	stableDir := filepath.Join(configDir, "claude-notifications-go")
+	if got := iTerm2HealthcheckSuccessMarkerPath(); got != filepath.Join(stableDir, ".iterm2-python-api-ok") {
+		t.Fatalf("iTerm2HealthcheckSuccessMarkerPath() = %q, want profile-local path", got)
+	}
+	if got := iTerm2PythonAPIPromptMarkerPath(); got != filepath.Join(stableDir, ".iterm2-python-api-disabled-prompted") {
+		t.Fatalf("iTerm2PythonAPIPromptMarkerPath() = %q, want profile-local path", got)
+	}
 }
 
 // setupFakeiTerm2Env creates a temporary directory with a fake iTerm2 venv

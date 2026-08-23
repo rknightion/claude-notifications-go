@@ -107,7 +107,8 @@ Run the same command as for installation — it will update both the plugin and 
 curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/bin/bootstrap.sh | bash
 ```
 
-Then restart Claude Code to apply the new version. Your settings in `~/.claude/claude-notifications-go/config.json` are preserved across updates.
+Then restart Claude Code to apply the new version. Your settings in the
+[resolved configuration file](#manual-configuration) are preserved across updates.
 
 <details>
 <summary>Manual update (if bootstrap didn't work)</summary>
@@ -191,13 +192,19 @@ Run `/claude-notifications-go:settings` to configure sounds, volume, webhooks, a
 
 ### Manual Configuration
 
-Config file location:
+The configuration root resolves in this order: `CLAUDE_CONFIG_DIR`, the legacy
+`CLAUDE_HOME` override, then the platform default. The settings wizard and
+runtime use the same root, so isolated Claude Code profiles keep independent
+notification settings.
 
-| Platform | Path |
-|----------|------|
-| macOS / Linux | `~/.claude/claude-notifications-go/config.json` |
-| Windows (Git Bash) | `~/.claude/claude-notifications-go/config.json` |
-| Windows (PowerShell) | `$env:USERPROFILE\.claude\claude-notifications-go\config.json` |
+Config file location under that root:
+
+| Environment | Path |
+|-------------|------|
+| Profile override | `$CLAUDE_CONFIG_DIR/claude-notifications-go/config.json` |
+| Legacy override | `$CLAUDE_HOME/claude-notifications-go/config.json` |
+| macOS / Linux default | `~/.claude/claude-notifications-go/config.json` |
+| Windows default | `%USERPROFILE%\.claude\claude-notifications-go\config.json` |
 
 Edit the config file directly:
 
@@ -381,7 +388,7 @@ bin/list-devices
 #   2: Immersed
 ```
 
-Then add the device name to your `~/.claude/claude-notifications-go/config.json`:
+Then add the device name to the [resolved configuration file](#manual-configuration):
 
 ```json
 {

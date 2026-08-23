@@ -15,7 +15,7 @@ Custom webhooks allow you to send notifications to any HTTP endpoint that accept
 
 ### Configuration
 
-Edit `~/.claude/claude-notifications-go/config.json`:
+Edit `${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json`:
 
 ```json
 {

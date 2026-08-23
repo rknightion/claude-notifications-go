@@ -18,7 +18,7 @@ Downloading the notification binary for your platform...
 # Get plugin root directory
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT}"
 if [ -z "$PLUGIN_ROOT" ]; then
-  INSTALLED_PATH="$HOME/.claude/plugins/marketplaces/claude-notifications-go"
+  INSTALLED_PATH="${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/plugins/marketplaces/claude-notifications-go"
   if [ -d "$INSTALLED_PATH" ]; then
     PLUGIN_ROOT="$INSTALLED_PATH"
   else

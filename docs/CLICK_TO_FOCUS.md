@@ -4,7 +4,7 @@ Clicking a notification activates your terminal window — no more hunting for t
 
 ## Configuration
 
-In `~/.claude/claude-notifications-go/config.json`:
+In `${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json`:
 
 ```json
 {
@@ -100,8 +100,8 @@ When using iTerm2's tmux integration (`tmux -CC`), standard `tmux select-window`
 
 **Manual setup** (if automatic setup failed):
 ```bash
-python3 -m venv ~/.claude/claude-notifications-go/iterm2-venv
-~/.claude/claude-notifications-go/iterm2-venv/bin/pip install iterm2
+python3 -m venv "${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/iterm2-venv"
+"${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/iterm2-venv/bin/pip" install iterm2
 ```
 
 **Diagnostics:**
@@ -110,7 +110,7 @@ python3 -m venv ~/.claude/claude-notifications-go/iterm2-venv
 echo "$CLAUDE_PLUGIN_ROOT"
 
 # List all iTerm2 tabs with tmux pane mappings
-~/.claude/claude-notifications-go/iterm2-venv/bin/python3 \
+"${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/iterm2-venv/bin/python3" \
   "$CLAUDE_PLUGIN_ROOT/scripts/iterm2-select-tab.py" --list
 ```
 

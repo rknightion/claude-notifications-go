@@ -25,7 +25,7 @@ The wizard will let you preview a sound at your selected volume before saving.
 
 ### Manual Configuration
 
-Edit `~/.claude/claude-notifications-go/config.json` and set the `volume` field:
+Edit `${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json` and set the `volume` field:
 
 ```json
 {
@@ -171,7 +171,7 @@ bin/sound-preview sounds/task-complete.mp3
 
 ### Test with actual notifications
 
-After configuring volume in `~/.claude/claude-notifications-go/config.json`, trigger a test notification:
+After configuring volume in `${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json`, trigger a test notification:
 
 ```bash
 # Manually trigger a test hook
@@ -285,7 +285,7 @@ Currently not supported - volume is global for all notifications. This feature m
 - **Notifier implementation:** `internal/notifier/notifier.go`
 - **Sound preview:** `cmd/sound-preview/main.go`
 - **Setup wizard:** `commands/setup-notifications.md`
-- **Example config:** `~/.claude/claude-notifications-go/config.json`
+- **Example config:** `${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}/claude-notifications-go/config.json`
 
 ## Future Enhancements
 
