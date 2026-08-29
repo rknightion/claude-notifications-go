@@ -26,6 +26,11 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Display Go version
         run: go version
 
@@ -33,25 +38,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Download dependencies
-        run: go mod download
-
-      - name: Verify dependencies
-        run: go mod verify
+        run: just setup
 
       - name: Run go vet
-        run: go vet ./...
+        run: just vet
 
       - name: Run go fmt check
-        run: |
-          fmt_output=$(go fmt ./...)
-          if [ -n "$fmt_output" ]; then
-            echo "The following files need formatting:"
-            echo "$fmt_output"
-            exit 1
-          fi
+        run: just fmt-check
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: just test
 
       - name: Upload coverage to Codecov
         if: matrix.go == '1.26'
@@ -62,20 +58,17 @@ jobs:
           fail_ci_if_error: false
 
       - name: Build binary
-        run: go build -o bin/claude-notifications ./cmd/claude-notifications
-
-      - name: Test binary execution (help)
-        run: ./bin/claude-notifications help
+        run: just smoke
 
       - name: Run install.sh unit tests
-        run: bash bin/install_test.sh
+        run: just test-install
 
       - name: Run install.sh E2E tests (offline + mock)
-        run: bash bin/install_e2e_test.sh
+        run: just test-install-e2e
 
       - name: Run install.sh E2E diagnostics (real network)
         if: matrix.go == '1.26'
-        run: bash bin/install_e2e_test.sh --real-network
+        run: just test-install-e2e --real-network
         timeout-minutes: 5
         continue-on-error: true
 
