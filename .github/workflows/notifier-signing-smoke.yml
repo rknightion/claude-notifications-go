@@ -25,6 +25,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Import Apple certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -63,11 +68,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cd swift-notifier
           if [ "${{ inputs.skip_notarize }}" = "true" ]; then
-            bash scripts/build-app.sh --ci --skip-notarize
+            just build-notifier --ci --skip-notarize
           else
-            bash scripts/build-app.sh --ci
+            just build-notifier --ci
           fi
 
       - name: Verify signature metadata
