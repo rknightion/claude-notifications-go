@@ -63,7 +63,17 @@ coverage: test
 # run the install.sh unit tests
 [group('check')]
 [no-exit-message]
-test-install:
+[script('bash')]
+test-install: build
+    placeholder=""
+    if [ "{{ goos }}" = "linux" ]; then
+        wrapper_target="$(readlink bin/claude-notifications)"
+        if [ ! -e "bin/$wrapper_target" ]; then
+            placeholder="bin/$wrapper_target"
+            : > "$placeholder"
+        fi
+    fi
+    trap 'rm -f "$placeholder"' EXIT
     bash bin/install_test.sh
 
 # run the install.sh end-to-end tests; pass --real-network for the live-network diagnostics

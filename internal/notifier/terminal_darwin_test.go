@@ -125,7 +125,7 @@ func TestGetTerminalNotifierPath_ClaudeNotifier(t *testing.T) {
 	cleanup, ok := setupClaudeNotifierEnv(t)
 	defer cleanup()
 	if !ok {
-		t.Skip("ClaudeNotifier.app not built (run 'make build-notifier' first)")
+		t.Skip("ClaudeNotifier.app not built (run 'just build-notifier' first)")
 	}
 
 	path, err := GetTerminalNotifierPath()

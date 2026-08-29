@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Claude Notifications!
 ## Prerequisites
 
 - **Go 1.21+** (tested with 1.25)
-- **Make** (for build commands)
+- **just** (https://just.systems) — `brew install just`
 - **Claude Code** (tested on v2.0.15)
 
 ## Getting Started
@@ -15,7 +15,8 @@ Thank you for your interest in contributing to Claude Notifications!
 ```bash
 git clone https://github.com/777genius/claude-notifications-go
 cd claude-notifications-go
-make build
+just setup
+just build
 ```
 
 ### 2. Install as local plugin
@@ -39,9 +40,9 @@ make build
 For repeatable local install/update testing without touching your real Claude setup, use:
 
 ```bash
-scripts/dev-local-plugin.sh install
-scripts/dev-local-plugin.sh bootstrap
-scripts/dev-local-plugin.sh status
+just dev-local-install
+just dev-local-bootstrap
+just dev-local-status
 ```
 
 This uses an isolated Claude config dir under `~/.claude-dev/claude-notifications-go` by default.
@@ -52,14 +53,14 @@ For the full local-development workflow, including real-`claude` E2E tests and s
 
 Use the smallest workflow that matches the change:
 
-- `scripts/dev-local-plugin.sh` for safe install/update/bootstrap testing in an isolated Claude config
-- `scripts/e2e-real-claude.sh` for real-`claude` smoke/manual validation
-- `scripts/dev-real-plugin.sh` only when you must validate inside your real `~/.claude` setup
+- `just dev-local-install` / `just dev-local-update` / `just dev-local-bootstrap` for safe testing in an isolated Claude config
+- `just e2e-smoke` / `just e2e-manual` for real-`claude` validation
+- `just dev-real-local` (asks for confirmation) only when you must validate inside your real `~/.claude` setup
 
 Start with:
 
 ```bash
-scripts/e2e-real-claude.sh status
+just e2e-status
 ```
 
 Then follow **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for the detailed workflow, platform support, and recommended validation matrix.
@@ -76,26 +77,20 @@ See [Architecture](docs/ARCHITECTURE.md) for a detailed overview. Key directorie
 | `commands/` | Plugin skill definitions (`.md` files) |
 | `sounds/` | Built-in notification sounds (MP3) |
 
-## Make Targets
+## Task Surface
 
 ```bash
-make help              # Show all available targets
-make build             # Build binaries (development mode with debug symbols)
-make build-all         # Build optimized binaries for all platforms
-make test              # Run tests with coverage
-make test-race         # Run tests with race detection
-make test-coverage     # Generate HTML coverage report
-make lint              # Run go vet + go fmt
-make clean             # Clean build artifacts
-make rebuild-and-commit  # Rebuild optimized binaries for all platforms
+just --list
 ```
+
+`just check` is the gate; every recipe carries a doc comment and a group.
 
 ## Testing
 
 ### Run all tests
 
 ```bash
-make test
+just test
 ```
 
 ### Run specific packages
@@ -107,12 +102,6 @@ go test ./internal/config -v
 go test ./internal/dedup -v -race
 ```
 
-### Integration tests
-
-```bash
-go test ./test -v
-```
-
 ### Real-Claude smoke tests
 
 See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for supported platforms, command examples, and manual click-to-focus validation notes.
@@ -120,13 +109,13 @@ See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for supported pla
 ### Run a single test
 
 ```bash
-go test -run TestStateMachine ./internal/analyzer -v
+just test TestStateMachine
 ```
 
 ### Coverage
 
 ```bash
-make test-coverage
+just coverage
 open coverage.html
 ```
 
@@ -146,15 +135,14 @@ All three platform CIs must pass before merging.
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/my-feature`
 3. Make your changes
-4. Run tests: `make test-race`
-5. Run linter: `make lint`
-6. Commit with a descriptive message following [Conventional Commits](https://www.conventionalcommits.org/):
+4. Run the gate: `just check`
+5. Commit with a descriptive message following [Conventional Commits](https://www.conventionalcommits.org/):
    - `feat:` — new features
    - `fix:` — bug fixes
    - `docs:` — documentation changes
    - `test:` — adding/updating tests
    - `chore:` — maintenance tasks
-7. Open a Pull Request against `main`
+6. Open a Pull Request against `main`
 
 ## Releasing
 

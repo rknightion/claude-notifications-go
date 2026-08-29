@@ -38,8 +38,7 @@ Add a new section at the top following [Keep a Changelog](https://keepachangelog
 ## 3. Run tests
 
 ```bash
-make test-race
-make lint
+just check
 ```
 
 ## 4. Commit, push, and wait for CI
@@ -96,8 +95,8 @@ The CI workflow:
 ### Local build (optional)
 
 ```bash
-make build-notifier                                      # ad-hoc or local cert signing
-cd swift-notifier && bash scripts/build-app.sh --ci      # Developer ID + notarization (needs env vars)
+just build-notifier                                      # ad-hoc or local cert signing
+just build-notifier --ci                                 # Developer ID + notarization (needs env vars)
 ```
 
 ## 6. Update release description

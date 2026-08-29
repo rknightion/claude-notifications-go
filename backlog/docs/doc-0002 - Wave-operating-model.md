@@ -3,7 +3,7 @@ id: doc-0002
 title: Wave operating model
 type: specification
 created_date: '2026-08-23 17:30'
-updated_date: '2026-08-23 17:38'
+updated_date: '2026-08-29 13:32'
 ---
 # Wave operating model — claude-notifications-go
 
@@ -35,7 +35,7 @@ Claude Code and Codex hook JSON are vendor contracts. Keep representative fixtur
 
 **Stable data must stay outside replaceable plugin caches.** Plugin updates may delete and recreate cache directories. Configuration and writable helper state belong under the active runtime data root; bundled sounds, icons, scripts, and binaries belong under the plugin root.
 
-**The installer unit test has a build precondition on Unix.** `bash bin/install_test.sh` expects the ignored `bin/claude-notifications` wrapper. Run `make build` first in a clean checkout. A failure caused by the missing wrapper is a failed check until rerun after that explicit precondition.
+**The installer unit test runs through its recipe.** `just test-install` builds the host binaries first and, on Linux, supplies a temporary ignored target so the retained Unix wrapper assertion remains valid. Use it (or `just check`) instead of calling the script directly.
 
 **Platform evidence does not transfer.** A macOS pass proves neither Windows toast activation nor Linux compositor focus. The E2E suite reports platform and real-network skips separately; preserve those as skipped, not passed.
 
@@ -60,11 +60,7 @@ A lane that needs one of these but does not own it returns a diff-shaped handoff
 Use package-level tests while iterating. The repository gate is:
 
 ```bash
-go test -race ./...
-go vet ./...
-make build
-bash bin/install_test.sh
-bash bin/install_e2e_test.sh
+just check
 ```
 
 Run platform-specific Swift, Windows, Linux, real-network, and manual click-to-focus checks when the changed surface requires them. State every unexercised platform or optional network leg explicitly.
