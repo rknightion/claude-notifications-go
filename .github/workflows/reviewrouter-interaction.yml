@@ -15,7 +15,7 @@ permissions:
 jobs:
   interaction:
     name: interaction
-    uses: 777genius/review-router/.github/workflows/reviewrouter-interaction-reusable.yml@v1
+    uses: 777genius/review-router/.github/workflows/reviewrouter-interaction-reusable.yml@7af79cbcbdf4f522b2410fadc7361f75149a63fd  # v1
     with:
       runtime_ref: v1
       api_url: "https://api.reviewrouter.site"
