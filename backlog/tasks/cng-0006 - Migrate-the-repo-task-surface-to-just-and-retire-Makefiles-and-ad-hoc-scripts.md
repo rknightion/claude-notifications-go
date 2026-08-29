@@ -1,10 +1,10 @@
 ---
 id: CNG-0006
 title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scripts
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-08-28 19:17'
-updated_date: '2026-08-29 10:42'
+updated_date: '2026-08-29 13:54'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -755,6 +755,35 @@ Do not touch, in this task:
 - [ ] #4 bash bin/install_test.sh
 - [ ] #5 bash bin/install_e2e_test.sh
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Establish the exact Makefile/script/workflow/doc mapping and preserve the task-defined immutable files.
+2. Add the canonical justfile, validate its parse/format and the macOS recipe surface, then move CI build/test/lint/generate commands to one-line just recipes while preserving actions, job names, and triggers.
+3. Update the task contract, contributor docs, and Backlog gate; remove Makefile and setup.sh only after repository-wide reference and hook sweeps.
+4. Run the required local gates and workflow/static validation, commit named paths to main, push, and capture CI evidence at the final SHA.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented the just surface and workflow migration in commits ba0702d, 1eb82cf, 2fb7fc1, 6dda2a1, acca3a1, and 4209b93.
+
+Final local validation on macOS passed: just --fmt --check, just --dump --dump-format json, and just check (Go race suite, installer unit tests 16/0, installer E2E 91/0 with 12 explicit skips, and Swift tests 30/0). actionlint passed for every workflow.
+
+A retained Unix wrapper assertion would fail on Linux after the safe suffixed build output, so test-install now provides a temporary ignored wrapper target only during that recipe; retained runtime scripts remain byte-identical.
+
+The full zizmor scan reports pre-existing tag-pinned action and permission findings; task scope explicitly preserves those actions and permission blocks. The new setup-just action is SHA-pinned.
+
+GitHub REST is currently rate-limited for the shared unauthenticated address, so exact final CI run IDs remain pending.
+
+Parked at the mandatory CodeRabbit pre-commit gate. The final staged migration diff is locally validated but must not be committed without review.
+
+CodeRabbit final-diff attempts were all organisation-plan rate-limited: first reported a 15-minute wait; evidence-based retries reported 1 minute, 18 seconds, then 7 minutes. No login, installation, or quota bypass was attempted.
+
+Resume boundary: wait for the review allowance, run `coderabbit review --agent` against the existing staged paths, triage any findings, then commit the reviewed named paths, push main, and capture green exact-SHA CI before finalizing the task.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
