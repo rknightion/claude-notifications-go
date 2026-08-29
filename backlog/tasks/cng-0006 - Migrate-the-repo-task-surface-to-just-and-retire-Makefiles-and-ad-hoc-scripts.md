@@ -4,7 +4,7 @@ title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scr
 status: Parked
 assignee: []
 created_date: '2026-08-28 19:17'
-updated_date: '2026-08-29 13:54'
+updated_date: '2026-08-29 18:21'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -783,6 +783,14 @@ Parked at the mandatory CodeRabbit pre-commit gate. The final staged migration d
 CodeRabbit final-diff attempts were all organisation-plan rate-limited: first reported a 15-minute wait; evidence-based retries reported 1 minute, 18 seconds, then 7 minutes. No login, installation, or quota bypass was attempted.
 
 Resume boundary: wait for the review allowance, run `coderabbit review --agent` against the existing staged paths, triage any findings, then commit the reviewed named paths, push main, and capture green exact-SHA CI before finalizing the task.
+
+2026-08-29: migration landed at f175af3 (Makefile and setup.sh deleted; AGENTS.md, CONTRIBUTING.md, docs and definition_of_done repointed at `just check`; the Go changes are `make`->`just` in a comment, a skip message and one test payload). CodeRabbit returned two findings, both fixed.
+
+STILL PARKED on two things, neither caused by the migration:
+
+1. No exact-head CI evidence is obtainable. rknightion/claude-notifications-go is a fork and has ZERO workflow runs in its entire history, although the seven workflows report state=active and actions/permissions reports enabled=true. GitHub does not run workflows on a fork until someone accepts the 'I understand my workflows, go ahead and enable them' prompt in the Actions tab. That needs a human click; nothing in the repo can fix it.
+
+2. `just check` is RED at HEAD for pre-existing reasons: four failures in internal/hooks (TestNewHandler_InvalidConfig, TestHandler_Stop_TeamMode_Smart_SuppressesLeadStop, TestHandler_Stop_TeamMode_Never_Suppresses, TestHandler_TeammateIdle_SendsWhenAllReady). Proven pre-existing by running the suite at HEAD in a detached worktree before the migration diff was applied — they fail identically there. `just fmt-check` and `just lint` both pass. Likely candidate is 4ea488e (feat: add Codex notification support) changing config validation and team-mode suppression without updating these tests; not investigated further.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
