@@ -18,38 +18,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Compare tag and version sources
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          release_version="${RELEASE_TAG#v}"
-          release_version_re='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-          if [[ ! "$release_version" =~ $release_version_re ]]; then
-            echo "Release tag '$RELEASE_TAG' must use the stable vX.Y.Z format"
-            exit 1
-          fi
-
-          check_version() {
-            label="$1"
-            actual="$2"
-            if [ "$actual" != "$release_version" ]; then
-              echo "$label version '$actual' does not match tag '$release_version'"
-              exit 1
-            fi
-          }
-
-          check_version "Go binary" "$(sed -n 's/^const version = "\([^"]*\)"$/\1/p' cmd/claude-notifications/main.go)"
-          check_version "Plugin manifest" "$(jq -er '.version' .claude-plugin/plugin.json)"
-          check_version "Marketplace metadata" "$(jq -er '.metadata.version' .claude-plugin/marketplace.json)"
-          check_version "Marketplace plugin" "$(jq -er '.plugins[] | select(.name == "claude-notifications-go") | .version' .claude-plugin/marketplace.json)"
-
-          if ! awk -v heading="## [$release_version]" '
-            $0 == heading || index($0, heading " - ") == 1 { found = 1 }
-            END { exit(found ? 0 : 1) }
-          ' CHANGELOG.md; then
-            echo "CHANGELOG.md has no entry for $release_version"
-            exit 1
-          fi
+        run: just verify-version "$RELEASE_TAG"
 
   build-matrix:
     name: Build ${{ matrix.platform }} ${{ matrix.arch }}
@@ -99,6 +76,11 @@ jobs:
         with:
           go-version: '1.26'
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
@@ -111,22 +93,7 @@ jobs:
           CGO_ENABLED: '1'
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_deployment_target }}
         shell: bash
-        run: |
-          mkdir -p dist
-          echo "Building claude-notifications..."
-          go build -ldflags="-s -w" -trimpath -o "dist/${{ matrix.binary }}" ./cmd/claude-notifications
-          echo "Building sound-preview..."
-          SOUND_PREVIEW_BINARY="${{ matrix.binary }}"
-          SOUND_PREVIEW_BINARY="${SOUND_PREVIEW_BINARY//claude-notifications/sound-preview}"
-          go build -ldflags="-s -w" -trimpath -o "dist/$SOUND_PREVIEW_BINARY" ./cmd/sound-preview
-          echo "Building list-devices..."
-          LIST_DEVICES_BINARY="${{ matrix.binary }}"
-          LIST_DEVICES_BINARY="${LIST_DEVICES_BINARY//claude-notifications/list-devices}"
-          go build -ldflags="-s -w" -trimpath -o "dist/$LIST_DEVICES_BINARY" ./cmd/list-devices
-          echo "Building list-sounds..."
-          LIST_SOUNDS_BINARY="${{ matrix.binary }}"
-          LIST_SOUNDS_BINARY="${LIST_SOUNDS_BINARY//claude-notifications/list-sounds}"
-          go build -ldflags="-s -w" -trimpath -o "dist/$LIST_SOUNDS_BINARY" ./cmd/list-sounds
+        run: just build-release ${{ matrix.platform }} ${{ matrix.arch }}
 
       - name: Verify macOS deployment target
         if: matrix.platform == 'darwin'
@@ -158,6 +125,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
 
       - name: Import Apple certificate
         env:
@@ -196,9 +168,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          cd swift-notifier
-          bash scripts/build-app.sh --ci
+        run: just build-notifier --ci
 
       - name: Create zip artifact
         run: |
