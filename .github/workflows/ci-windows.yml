@@ -26,49 +26,31 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Display Go version
         run: go version
 
       - name: Download dependencies
-        run: go mod download
-
-      - name: Verify dependencies
-        run: go mod verify
+        run: just setup
 
       - name: Run go vet
-        run: go vet ./...
+        run: just vet
 
       - name: Run go fmt check
-        run: |
-          $fmt_output = go fmt ./...
-          if ($fmt_output) {
-            Write-Host "The following files need formatting:"
-            Write-Host $fmt_output
-            exit 1
-          }
-        shell: pwsh
+        run: just fmt-check
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-        shell: bash
+        run: just test
 
       - name: Build binary
-        run: go build -o bin/claude-notifications.exe ./cmd/claude-notifications
-
-      - name: Test binary execution (help)
-        run: ./bin/claude-notifications.exe help
-        shell: bash
-
-      - name: Build sound preview binary
-        run: go build -o bin/sound-preview.exe ./cmd/sound-preview
-
-      - name: Build list-sounds binary
-        run: go build -o bin/list-sounds.exe ./cmd/list-sounds
+        run: just smoke
 
       - name: Run install.sh unit tests
-        run: bash bin/install_test.sh
-        shell: bash
+        run: just test-install
 
       - name: Run install.sh E2E tests (offline + mock)
-        run: bash bin/install_e2e_test.sh
-        shell: bash
+        run: just test-install-e2e
