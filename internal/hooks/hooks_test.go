@@ -367,7 +367,11 @@ func TestNewHandlerForRuntime_CodexWritesOnlyInsideCodexHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handler.notifierSvc.Close()
-	defer handler.webhookSvc.Shutdown(time.Second)
+	defer func() {
+		if err := handler.webhookSvc.Shutdown(time.Second); err != nil {
+			t.Errorf("shutdown webhook service: %v", err)
+		}
+	}()
 
 	if handler.runtime != config.RuntimeCodex {
 		t.Fatalf("runtime = %q, want codex", handler.runtime)
