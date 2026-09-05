@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Product-specific additions to the central CodeRabbit defaults.
+# Keep inheritance enabled; shared review policy lives in the owner/coderabbit repository.
+inheritance: true
+reviews:
+  path_instructions:
+  - path: internal/hooks/**
+    instructions: >-
+      Treat Claude Code and Codex hook JSON, event names, stdin handling, timeout limits and registration
+      format as external versioned contracts. Preserve omitted versus explicit-empty configuration semantics,
+      literal path characters, subagent/event classification, and executable-derived plugin roots. Require
+      focused regression coverage for adapter, config-resolution, installation or registration changes
+      on every affected platform.
+  - path: internal/notifier/**
+    instructions: >-
+      Trace desktop notification and click-to-focus behaviour separately for macOS, Linux and Windows
+      build-tag variants. Preserve permission-denied versus fallback semantics, exact terminal/session
+      targeting, no unexpected focus stealing, terminal bell behaviour, sound lifetime and Close synchronization.
+      Verify that a platform fix compiles with the complementary stub files and does not silently change
+      another OS path.
+  - path: internal/webhook/**
+    instructions: >-
+      Check webhook request body compatibility, bounded retries with context cancellation, Retry-After/429
+      and 5xx handling, response-body closure, circuit breaker and rate limiter interaction, and redaction
+      of URLs, credentials and response content in logs. Delivery failure must remain observable without
+      blocking shutdown indefinitely.
+  - path: scripts/**
+    instructions: >-
+      Review installers and generated hook commands across POSIX shells, Git Bash and Windows execution.
+      Preserve architecture/OS asset selection, checksum verification, quoting of spaces and non-ASCII
+      paths, configured-home resolution, idempotence and rollback on partial installation. Never assume
+      WSL is native Windows or Linux.
